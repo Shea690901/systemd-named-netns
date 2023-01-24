@@ -2,7 +2,7 @@
 # netns-bridge@.service, netns-mvbr@.service and netns-nat@.service.
 # This is the default config.
 # You can override config per netns by creating a file named
-# netns-<your_netns_name>.
+# /etc/netns/<your_netns_name>.bash
 
 # Bridge name for netns-bridge@.service
 #BRIDGE=br0
