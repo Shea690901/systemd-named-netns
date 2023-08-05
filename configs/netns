@@ -27,6 +27,3 @@
 
 # If you need static MAC
 #MACADDR=00:11:22:33:44:55
-
-# Set up the host to accept NATed traffic; see netns-nat file for detail
-#NAT_ACCEPT_TRAFFIC=1

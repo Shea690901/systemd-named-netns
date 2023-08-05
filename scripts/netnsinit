@@ -102,15 +102,11 @@ autoconfigure_nat_up_outside() {
 
 	# set up NAT
 	# in POSTROUTING we cannot select via source interface, so we use source ip address here
-	iptables -t nat -A POSTROUTING -s "${IPADDR%%/*}" -j MASQUERADE
-	ip6tables -t nat -A POSTROUTING -s "${IPADDR6%%/*}" -j MASQUERADE
-
-	if [ "${NAT_ACCEPT_TRAFFIC}" == "1" ]; then
-		iptables -A FORWARD -i "${DEVNAME_OUTSIDE}" -j ACCEPT
-		iptables -A FORWARD -o "${DEVNAME_OUTSIDE}" -j ACCEPT
-		#Accept related traffic
-		iptables -I INPUT -i "${DEVNAME_OUTSIDE}" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-	fi
+	nft add table inet "netns-${NSNAME?}"
+	nft flush table inet "netns-${NSNAME?}"
+	nft add chain inet "netns-${NSNAME?}" postrouting '{ type nat hook postrouting priority srcnat ; }'
+	nft add rule inet "netns-${NSNAME?}" postrouting ip saddr "${IPADDR%%/*}" masquerade
+	nft add rule inet "netns-${NSNAME?}" postrouting ip6 saddr "${IPADDR6%%/*}" masquerade
 
 	return 0 # additional precation against "set -e" in case of future mods of this function
 }
@@ -137,14 +133,7 @@ autoconfigure_nat_down_inside() {
 
 autoconfigure_nat_down_outside() {
 	# remove NAT
-	iptables -t nat -D POSTROUTING -s "${IPADDR%%/*}" -j MASQUERADE
-	ip6tables -t nat -D POSTROUTING -s "${IPADDR6%%/*}" -j MASQUERADE
-
-	if [ "${NAT_ACCEPT_TRAFFIC}" == "1" ]; then
-		iptables -D FORWARD -i "${DEVNAME_OUTSIDE}" -j ACCEPT
-		iptables -D FORWARD -o "${DEVNAME_OUTSIDE}" -j ACCEPT
-		iptables -D INPUT -i "${DEVNAME_OUTSIDE}" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-	fi
+	nft flush table inet "netns-${NSNAME?}"
 
 	autoconfigure_tunnel_down_outside
 
