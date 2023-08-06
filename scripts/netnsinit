@@ -183,8 +183,8 @@ autoconfigure() {
 
 	echo "Starting autoconfigure for ${NSTYPE} ${NSNAME}"
 
-	DEVNAME_INSIDE=vn-${NSNAME}1
-	DEVNAME_OUTSIDE=vn-${NSNAME}0
+	DEVNAME_INSIDE=vn-${NSNAME}i
+	DEVNAME_OUTSIDE=vn-${NSNAME}o
 
 	source /etc/default/netns
 	! source "/etc/default/netns-${NSTYPE}"
