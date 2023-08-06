@@ -190,8 +190,8 @@ autoconfigure() {
 	! source "/etc/default/netns-${NSTYPE}"
 	! source "/etc/netns/${NSNAME}.bash"
 
-	if [[ -f "/etc/netns/${NSNAME}_pre${UPDOWN}_${INOUT}.sh" ]]; then
-		source "/etc/netns/${NSNAME}_pre${UPDOWN}_${INOUT}.sh"
+	if [[ -f "/etc/netns/${NSTYPE}_${NSNAME}_pre${UPDOWN}_${INOUT}.sh" ]]; then
+		source "/etc/netns/${NSTYPE}_${NSNAME}_pre${UPDOWN}_${INOUT}.sh"
 	fi
 
 	if type -t autoconfigure_"${NSTYPE}_${UPDOWN}_${INOUT}" >/dev/null ; then
@@ -201,8 +201,8 @@ autoconfigure() {
 		echo "No configuration required."
 	fi
 
-	if [[ -f "/etc/netns/${NSNAME}_post${UPDOWN}_${INOUT}.sh" ]]; then
-		source "/etc/netns/${NSNAME}_post${UPDOWN}_${INOUT}.sh"
+	if [[ -f "/etc/netns/${NSTYPE}_${NSNAME}_post${UPDOWN}_${INOUT}.sh" ]]; then
+		source "/etc/netns/${NSTYPE}_${NSNAME}_post${UPDOWN}_${INOUT}.sh"
 	fi
 
 	return 0
