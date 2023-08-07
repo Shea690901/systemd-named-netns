@@ -122,6 +122,10 @@ autoconfigure_nat_up_inside() {
 
 	autoconfigure_tunnel_up_inside
 
+	# allow forwarding to make all these things work
+	sysctl net.ipv4.ip_forward=1
+	sysctl net.ipv6.conf.all.forwarding=1
+
 	return 0 # additional precation against "set -e" in case of future mods of this function
 }
 
