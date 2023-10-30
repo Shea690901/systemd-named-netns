@@ -29,6 +29,10 @@ autoconfigure_tunnel_up_outside() {
 	if [ -n "${IPADDR_OUTSIDE}" ]; then
 		ip address add "${IPADDR_OUTSIDE}" dev "${DEVNAME_OUTSIDE}"
 	fi
+	# add ipv6 address at global end
+	if [ -n "${IPADDR6_OUTSIDE}" ]; then
+		ip -6 address add "${IPADDR6_OUTSIDE}" dev "${DEVNAME_OUTSIDE}"
+	fi
 
 	return 0 # additional precation against "set -e" in case of future mods of this function
 }
@@ -38,10 +42,17 @@ autoconfigure_tunnel_up_inside() {
 	if [ -n "${IPADDR}" ]; then
 		ip address add "${IPADDR}" dev "${DEVNAME_INSIDE}"
 	fi
+	# add ipv6 address at netns end
+	if [ -n "${IPADDR6}" ]; then
+		ip address add "${IPADDR6}" dev "${DEVNAME_INSIDE}"
+	fi
 
 	# setup default route
 	if [ -n "${GATEWAY}" ]; then
 		ip route add default via "${GATEWAY%%/*}" dev "${DEVNAME_INSIDE}" onlink
+	fi
+	if [ -n "${GATEWAY6}" ]; then
+		ip -6 route add default via "${GATEWAY6%%/*}" dev "${DEVNAME_INSIDE}" onlink
 	fi
 
 	# if DHCP is configured
@@ -91,25 +102,29 @@ autoconfigure_nat_up_outside() {
 
 	# set up NAT
 	# in POSTROUTING we cannot select via source interface, so we use source ip address here
-	iptables -t nat -A POSTROUTING -s "${IPADDR_OUTSIDE}" -j MASQUERADE
-
-	if [ "${NAT_ACCEPT_TRAFFIC}" == "1" ]; then
-		iptables -A FORWARD -i "${DEVNAME_OUTSIDE}" -j ACCEPT
-		iptables -A FORWARD -o "${DEVNAME_OUTSIDE}" -j ACCEPT
-		#Accept related traffic
-		iptables -I INPUT -i "${DEVNAME_OUTSIDE}" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
-	fi
+	nft add table inet "netns-${NSNAME?}"
+	nft flush table inet "netns-${NSNAME?}"
+	nft add chain inet "netns-${NSNAME?}" postrouting '{ type nat hook postrouting priority srcnat ; }'
+	nft add rule inet "netns-${NSNAME?}" postrouting ip saddr "${IPADDR%%/*}" masquerade
+	nft add rule inet "netns-${NSNAME?}" postrouting ip6 saddr "${IPADDR6%%/*}" masquerade
 
 	return 0 # additional precation against "set -e" in case of future mods of this function
 }
 
 autoconfigure_nat_up_inside() {
-	autoconfigure_tunnel_up_inside
-
 	# add default route if gateway undefined
 	if [ -z "${GATEWAY}" ] && [ -n "${IPADDR_OUTSIDE}" ]; then
 		GATEWAY="${IPADDR_OUTSIDE}"
 	fi
+	if [ -z "${GATEWAY6}" ] && [ -n "${IPADDR6_OUTSIDE}" ]; then
+		GATEWAY6="${IPADDR6_OUTSIDE}"
+	fi
+
+	autoconfigure_tunnel_up_inside
+
+	# allow forwarding to make all these things work
+	sysctl net.ipv4.ip_forward=1
+	sysctl net.ipv6.conf.all.forwarding=1
 
 	return 0 # additional precation against "set -e" in case of future mods of this function
 }
@@ -122,11 +137,7 @@ autoconfigure_nat_down_inside() {
 
 autoconfigure_nat_down_outside() {
 	# remove NAT
-	iptables -t nat -D POSTROUTING -s "${IPADDR_OUTSIDE}" -j MASQUERADE
-
-	iptables -D FORWARD -i "${DEVNAME_OUTSIDE}" -j ACCEPT
-	iptables -D FORWARD -o "${DEVNAME_OUTSIDE}" -j ACCEPT
-	iptables -D INPUT -i "${DEVNAME_OUTSIDE}" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+	nft flush table inet "netns-${NSNAME?}"
 
 	autoconfigure_tunnel_down_outside
 
@@ -176,19 +187,26 @@ autoconfigure() {
 
 	echo "Starting autoconfigure for ${NSTYPE} ${NSNAME}"
 
-	DEVNAME_INSIDE=vn-${NSNAME}1
-	DEVNAME_OUTSIDE=vn-${NSNAME}0
+	DEVNAME_INSIDE=vn-${NSNAME}i
+	DEVNAME_OUTSIDE=vn-${NSNAME}o
 
 	source /etc/default/netns
 	! source "/etc/default/netns-${NSTYPE}"
-	! source "/etc/default/netns-${NSNAME}" # for compatibility, see https://github.com/Jamesits/systemd-named-netns/pull/21
-	! source "/etc/default/netns-${NSTYPE}-${NSNAME}"
+	! source "/etc/netns/${NSNAME}.bash"
+
+	if [[ -f "/etc/netns/${NSTYPE}_${NSNAME}_pre${UPDOWN}_${INOUT}.sh" ]]; then
+		source "/etc/netns/${NSTYPE}_${NSNAME}_pre${UPDOWN}_${INOUT}.sh"
+	fi
 
 	if type -t autoconfigure_"${NSTYPE}_${UPDOWN}_${INOUT}" >/dev/null ; then
 		autoconfigure_"${NSTYPE}_${UPDOWN}_${INOUT}" "$@"
 		echo "Autoconfiguration finished."
 	else
 		echo "No configuration required."
+	fi
+
+	if [[ -f "/etc/netns/${NSTYPE}_${NSNAME}_post${UPDOWN}_${INOUT}.sh" ]]; then
+		source "/etc/netns/${NSTYPE}_${NSNAME}_post${UPDOWN}_${INOUT}.sh"
 	fi
 
 	return 0
